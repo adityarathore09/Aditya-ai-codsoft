@@ -1,0 +1,51 @@
+import pandas as pd
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.preprocessing import StandardScaler
+
+# Sample movie ratings data
+data = {
+    'User': ['Alice', 'Alice', 'Alice', 'Bob', 'Bob', 'Charlie', 'Charlie', 'Charlie', 'Charlie'],
+    'Movie': ['Inception', 'Titanic', 'Avatar', 'Inception', 'Titanic', 'Titanic', 'Avatar', 'Joker', 'Inception'],
+    'Rating': [5, 4, 5, 5, 3, 4, 4, 5, 4]
+}
+
+df = pd.DataFrame(data)
+
+# Create pivot table (User-Movie Matrix)
+movie_matrix = df.pivot_table(index='User', columns='Movie', values='Rating').fillna(0)
+
+# Normalize the matrix (optional but useful)
+scaler = StandardScaler()
+norm_matrix = scaler.fit_transform(movie_matrix)
+
+# Compute similarity between users
+similarity = cosine_similarity(norm_matrix)
+similarity_df = pd.DataFrame(similarity, index=movie_matrix.index, columns=movie_matrix.index)
+
+print("User Similarity Matrix:\n", similarity_df)
+
+# Recommender function
+def recommend_movies(user, matrix, similarity_df, top_n=2):
+    if user not in matrix.index:
+        return f"No data for user: {user}"
+    
+    sim_scores = similarity_df[user].drop(user)
+    most_similar = sim_scores.sort_values(ascending=False)
+
+    # Weighted rating sum
+    weighted_ratings = pd.Series(dtype=float)
+    for similar_user, score in most_similar.items():
+        weighted_ratings = weighted_ratings.add(matrix.loc[similar_user] * score, fill_value=0)
+
+    # Normalize by similarity sum
+    weighted_ratings = weighted_ratings / most_similar.sum()
+
+    # Filter out already watched
+    watched = matrix.loc[user][matrix.loc[user] > 0].index
+    recommendations = weighted_ratings.drop(watched).sort_values(ascending=False).head(top_n)
+
+    return recommendations
+
+# Try recommending for 'Bob'
+recommendations = recommend_movies('Bob', movie_matrix, similarity_df)
+print("\nRecommended Movies for Bob:\n", recommendations)
